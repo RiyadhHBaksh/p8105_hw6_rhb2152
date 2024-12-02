@@ -104,6 +104,115 @@ estimates |>
 
 ## Problem 2
 
+```{r, message=FALSE, warning=FALSE}
+df =
+  read_csv(file="data/homicide-data.csv") |>
+  mutate(
+    solved = case_match(
+      disposition,
+      "Open/No arrest" ~ 0,
+      "Closed by arrest" ~ 1,
+      "Closed without arrest" ~ 0,
+    ),
+    victim_age = as.numeric(victim_age),
+    city_state = paste(city,state)
+  ) |>
+  filter(
+    city_state != "Dallas TX",
+    city_state != "Phoenix, AZ",
+    city_state != "Kansas City MO",
+    city_state != "Tulsa AL",
+    victim_race == "White" | victim_race == "Black"
+  ) |>
+  select(city_state, victim_race, victim_age, victim_sex, solved) |>
+  drop_na()
+```
+
+For the `Baltimore MD`, the odds ratio is 0.426 going from female to male. The 95% confidence interval is (0.324, 0.558). In other words, the odds of solving a case is 2.35 times more likely for females than for males (the reciprocal of the odds ratio in this case).
+
+```{r, message=FALSE, warning=FALSE}
+baltimore_logistic =
+  df |>
+  filter(city_state == "Baltimore MD") |>
+  glm(solved ~ victim_age + victim_race + victim_sex, data=_, family=binomial())
+
+baltimore_logistic |>
+  broom::tidy() |>
+  mutate(OR = exp(estimate)) |>
+  select(term, estimate, OR, p.value) |>
+  knitr::kable(digits=3)
+
+ci =
+  baltimore_logistic |>
+  confint() |>
+  exp()
+
+knitr::kable(ci, digits=3)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+odds =
+  df |>
+  nest(data=victim_race:solved) |>
+  mutate(
+    models = map(data,
+                 \(df) glm(solved ~ victim_race + victim_age + victim_sex,
+                           data=df, family=binomial())),
+    results = map(models, broom::tidy),
+    ci = map(models,confint)
+  ) |>
+  select(-data, -models) |>
+  unnest(results, ci) |>
+  filter(term=="victim_sexMale") |>
+  mutate(
+    OR = exp(estimate),
+    lower = exp(ci[,1]),
+    upper = exp(ci[,2])
+  ) |>
+  select(city_state, OR, lower, upper) |>
+  arrange(-OR)
+
+knitr::kable(odds, digits=3)
+
+```
+
+The plot of the odds ratio for solving a homicide if the victim is male compared to female is shown below for each of the cities. This plot shows that in all cities, either the odds are not significant (confidence interval includes 1), or it is more likely that the case is solved if the victim is female (odds ratio less than 1).
+
+```{r}
+ggplot(odds,aes(x=reorder(city_state,-OR),y=OR)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=lower,ymax=upper)) +
+  theme(axis.text.x=element_text(angle=90)) +
+  xlab("City") +
+  ylab("Odds Ratio of Solving Homicide (Male/Female)")
+```
+
 
 
 ## Problem 3
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
